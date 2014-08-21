@@ -116,8 +116,6 @@ int application_update::exec()
 
         libtorrent::file_storage fs;
         fs.set_piece_length(_piece_size);
-        //libtorrent::add_files(fs, full_path.constData());
-        //_pad(fs, _piece_size);
 
 
         /*QCryptographicHash hash(QCryptographicHash::Sha1);
@@ -225,44 +223,6 @@ void application_update::_addFile(libtorrent::file_storage &fs, QFileInfo f, QSt
     e.size = pad_size;
     e.pad_file = true;
     fs.add_file(e);//, sha1.constData());
-}
-
-void application_update::_pad(libtorrent::file_storage &fs, unsigned piece_size)
-{/*
-    using namespace libtorrent;
-
-    for (std::vector<internal_file_entry>::iterator i = fs.begin(); i != fs.end(); ++i) {
-        unsigned pad_size = piece_size - (i->size % piece_size);
-        if(pad_size == piece_size || pad_size == 0) continue;
-
-        fs.add_file();
-        internal_file_entry e;
-        int cur_index = file_index(*i);
-        i = m_files.insert(i, e);
-        i->size = pad_size;
-        i->offset = off;
-        char name[30];
-        snprintf(name, sizeof(name), ".____padding_file/%d", padding_file);
-        std::string path = combine_path(m_name, name);
-        i->set_name(path.c_str());
-        i->pad_file = true;
-        off += pad_size;
-        ++padding_file;
-
-        if (int(m_mtime.size()) > cur_index)
-            m_mtime.insert(m_mtime.begin() + cur_index, 0);
-
-        if (int(m_file_hashes.size()) > cur_index)
-            m_file_hashes.insert(m_file_hashes.begin()
-                + cur_index, (char const*)NULL);
-
-        if (int(m_file_base.size()) > cur_index)
-            m_file_base.insert(m_file_base.begin() + cur_index, 0);
-
-        // skip the pad file we just added and point
-        // at the current file again
-        ++i;
-    }*/
 }
 
 void application_update::_hash(const QByteArray &data)

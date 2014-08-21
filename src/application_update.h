@@ -41,7 +41,6 @@ private:
     unsigned _hasher_size;
     libtorrent::hasher _hasher;
     QList<libtorrent::sha1_hash> _hashs;
-    CryptoPP::RSA::PrivateKey _privateKey;
     CryptoPP::RSASSA_PKCS1v15_SHA_Signer _signer;
 };
 

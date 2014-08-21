@@ -70,7 +70,6 @@ signals:
 private slots:
 
     void saveResumeData(bool resume_session = true);
-    void popAlerts();
     void onAlert(void *a);
 
 private:

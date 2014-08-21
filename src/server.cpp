@@ -65,12 +65,6 @@ void server::handleHTTPRequst(Tufao::HttpServerRequest &req, Tufao::HttpServerRe
         res.write(data);
     });
     res.end();
-
-    /*res.write("Hello World ");
-    res.write(infoHash.toHex());
-    res.write(" ");
-    res.write(req.url().path().toUtf8());
-    res.end("\n");*/
 }
 
 int server::acceptSOCKSRequest(QByteArray domainName, qint16 portNumber, QByteArray userid)

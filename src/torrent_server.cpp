@@ -103,8 +103,6 @@ torrent_server::torrent_server(QObject *parent) :
     timer->setSingleShot(false);
     timer->setInterval(10000);
     timer->setTimerType(Qt::VeryCoarseTimer);
-    //connect(timer, SIGNAL(timeout()), this, SLOT(syncState()));
-    //connect(timer, SIGNAL(timeout()), this, SLOT(popAlerts()));
     connect(timer, SIGNAL(timeout()), this, SLOT(saveResumeData()));
     timer->start();
 
@@ -318,26 +316,7 @@ bool torrent_server::stream_file(torrent_server::file_ptr f, std::function<void(
         return next_piece >= f->last_piece;
     });
 
-
-    /*
-    std::vector<size_type> file_progress;
-    for(;;) {
-        t.file_progress(file_progress, libtorrent::torrent_handle::piece_granularity);
-        if(file_progress[index] == file_size) break;
-        wait_for_torrent_alert(info_hash, libtorrent::state_changed_alert::alert_type);
-    }
-
-    QFile f(QDir(QString::fromStdString(t.save_path())).absoluteFilePath(QString::fromStdString(ti.files().file_path(index))));
-    f.open(QIODevice::ReadOnly);
-    while(!f.atEnd()) {
-        stream(f.read(1024 * 16), f.atEnd());
-    }
-    f.close();
-
-    //t.file_priority(index, 1);
-    */
     f->t.set_priority(f->t.status().priority - 1);
-
     return true;
 }
 
@@ -396,28 +375,11 @@ torrent_server::alert_ptr torrent_server::wait_for_torrent_alert(libtorrent::sha
     });
 }
 
-void torrent_server::popAlerts()
-{
-    std::deque<libtorrent::alert*> alerts;
-    _session->pop_alerts(&alerts);
-    for(libtorrent::alert *a : alerts) {
-        qDebug() << "libtorrent" << a->message().c_str();
-        alert_ptr a_(a);
-        emit alert(a_);
-    }
-}
-
 void torrent_server::onAlert(void *_a)
 {
     libtorrent::alert *a = reinterpret_cast<libtorrent::alert*>(_a);
-    // https://code.google.com/p/libtorrent/issues/detail?id=664
-    //if(a->type() == libtorrent::add_torrent_alert::alert_type) {
-    //    libtorrent::add_torrent_alert *aa = dynamic_cast<libtorrent::add_torrent_alert*>(a);
-    //    qDebug() << "libtorrent add torrent" << aa->params.info_hash.to_string().c_str();
-    //} else {
     std::string typeName = std::string("libtorrent::") + a->what();
     if(_debug) qDebug() << typeName.c_str() << a->message().c_str();
-    //}
     alert_ptr a_(a);
     emit alert(a_);
 }
