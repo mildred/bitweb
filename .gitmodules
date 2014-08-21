@@ -1,0 +1,3 @@
+[submodule "src/deathhandler"]
+	path = src/deathhandler
+	url = https://github.com/vmarkovtsev/DeathHandler.git
