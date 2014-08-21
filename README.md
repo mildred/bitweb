@@ -1,34 +1,128 @@
-The server software would:
+BitWeb
+======
 
-- Use C++2011 and boost
-- Accept [SOCKS4A](http://www.openssh.com/txt/socks4a.protocol)
-  ([SOCKS4](http://www.openssh.com/txt/socks4.protocol)) connections
-- Accept HTTP connection on top of SOCKS4A. HTTP Protocol implementation could
-  be provided by  [pion](https://github.com/splunk/pion) although there could be
-  alternatives as referenced in [this thread](http://stackoverflow.com/questions/175507/c-c-web-server-library)
-- Transform the domain name xxx.bitweb to a magnet link (xxx being the
-  info-hash). Feed it to [libtorrent](http://www.rasterbar.com/products/libtorrent/).
-- Download as fast as possible the metadata and the requested file. Download
-  other files in background. make sure that the file being requested is
-  downloaded in sequential order.
-  This may be useful: http://www.rasterbar.com/products/libtorrent/streaming.html
-- If the torrent is already downloading, make sure that the file requested is
-  downloaded as fast as possible in sequential order.
-- Serve the downloaded file as it is being downloaded. Do not wait for the
-  torrent download to complete.
+This is a cntinuation of the [P2PWeb](//github.com/mildred/p2pweb) project,
+using the bittorrent technology. In a few words, this is a proxy software that
+you can plug your browser with, and that will let you access torrents as if they
+were websites.
 
-This would make a good demo. Improvement includes extnsions to bittorrent:
+For example, when you point yout browser to
+`http://dbbda49df0642ebc45f142059e60552a70cc3c5b.bitweb/index.html`, the proxy
+will download the torrent that has the info_hash
+`dbbda49df0642ebc45f142059e60552a70cc3c5b`, will look at the file `index.html`
+and will serve it over http to your browser. This is the same technology as the
+magnet links for torrents.
 
-- store metadata with files (HTTP headers such as content type)
-- store a public key with the torrent and sign the torrent
-- either augment the torrent (if possible) or make a torrent reference a
-  previous torrent. This would make torrent revisions.
-- advertise torrent revisions on the DHT and download latest revision of a
-  torrent by default. Allow mode that download specific revision.
-- advertise metadata on DHT (backlinks).
+The purpose of this is to have:
+
+- be able to put a website online without having to buy for hardware. This
+  reduce costs to create a website and do not force website authors to use
+  advertisement to pay for these costs. The end user benefits from it as he is
+  not tracked by the advertisement companies.
+
+- promote static websites that don't rely on server software. Here, we just
+  can't. If you need a server-specific behaviour, you are creating a web
+  application. You could distribute the frontend using bitweb and let the user
+  choose the backend.
+
+- decentralize completely the web. Don't separate the client from the server.
+  Having a distributed system where anyone can add a server is great, but is not
+  enough. People will always want to buy the servers from someone else because
+  this is more convenient. And you have big centralized services all over again.
+
+- bring back privacy on the web. With no server to keep track of you requests,
+  it is much more difficult to track your activity.
+
+- make it much more difficult for  central authority to block websites.
+
+Description and installation
+============================
+
+The software is both a SOCKS4A proxy (that can reply to HTTP requests for
+`.bitweb` domains) and a bittorrent client.
+
+In order to have your browser redirect to this proxy, create a `proxy.js` file
+containing:
+
+    function FindProxyForURL(url, host) {
+        isp = "PROXY ip_address:port; DIRECT";
+        tor = "SOCKS 127.0.0.1:9050";
+        bit = "SOCKS 127.0.0.1:8878";
+        if (shExpMatch(host, "*.onion")) return tor;
+        if (shExpMatch(host, "*.bitweb")) return bit;
+        return "DIRECT";
+    }
+
+Put the url of this file (using the `file:` protocol) in the proxy settings of
+your browser for the autoconfiguration URL.
+
+Further work, Bittorrent extensions
+===================================
+
+Padding files (implemented)
+-------------
+
+In order to be able to share pieces between different versions of a torrent, add
+padding files in the torrent to make sure that every legitimate file is aligned
+with a piece boundary. Use the libtorrent approach.
+
+Torrent signature (implemented)
+-----------------
+
+A info dict can contain a RSA public key and a signature that validates the
+owner of the corresponding private key authored the info dict. The signature is
+computed using the bencoding of the info dict (with the signature field
+removed).
+
+File metadata
+-------------
+
+Add HTTP header information for each file in a torrent (the content-type for
+example).
+
+Torrent versions
+----------------
+
+A torrent can reference previous versions. When referencing a previous version,
+a torrent must also reference recursively all the previous versions.
+
+The DHT must store for each torrent all the newer versions. For each version,
+the DHT must also contain the public key (or hash of the public key) and the
+list of parent versions. With this information, a client knows which is the
+latest version (the greatest number of revisions with the same key).
+
+Backlinks
+---------
+
+A torrent can reference other torrents (or a specific file in other torrents).
+A link is composed of a source (torent info hash and filename), a relation type
+(uri that describes what relation the source has to the destination) and a
+destination (info hash of a torrent and a filename).
+
+Forward links should be stored in the torrent itself and backlinks should be
+available in the DHT.
+
+Encryption
+----------
+
+torrents (info dict and content itself) should be able to be encrypted using a
+password (that can be embedded in HTML links). like freenet, this would allow
+anyone to share space and bandwidth for websites you can't know anything about.
+Notes would advertise that they are willing to share disk space or bandwidth and
+would download automatically such torrents.
+
+Reference
+=========
+
+- [SOCKS4](http://www.openssh.com/txt/socks4.protocol)
+- [SOCKS4A](http://www.openssh.com/txt/socks4a.protocol)
+- [libtorrent](http://www.rasterbar.com/products/libtorrent/)
+
+Old Things (for personal reference)
+===================================
 
 Torrent file spec
-=================
+-----------------
 
 - Use signing spec at http://bittorrent.org/beps/bep_0035.html
 - Use http://bittorrent.org/beps/bep_0038.html
@@ -79,7 +173,7 @@ Make sure that identical files get identical pieces, through different version, 
 Key format is DER (as understood by QSslKey, that is the binary information contained in the PEM format in a base64 form)
 
 Command Line
-============
+------------
 
 start daemon:
 
@@ -98,7 +192,7 @@ update torrent file
     bitweb -U|--update -t TORRENTFILE -f SUBFILE -h HEADER:VALUE...
 
 SOCKS Interface
-===============
+---------------
 
 Access the INFOHASH website at this exact revision:
 
@@ -122,7 +216,7 @@ parent. For each infohash, the author identity is stored as well (hash of the
 public key).
 
 Crypto++
-========
+--------
 
 Can't load DER encoded key? Check it is in PKCS#8 format
 
