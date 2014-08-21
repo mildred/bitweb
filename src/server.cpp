@@ -22,7 +22,8 @@ server::server(torrent_server *torrent, QObject *parent) :
     _torrent(torrent)
 {
 
-    connect(this,    &HttpServer::requestReady, this, &server::handleHTTPRequst);
+    connect(this,    SIGNAL(requestReady(Tufao::HttpServerRequest&,Tufao::HttpServerResponse&)),
+            this,    SLOT(handleHTTPRequst(Tufao::HttpServerRequest&,Tufao::HttpServerResponse&)));
     connect(&_socks, SIGNAL(connectionRequested(QTcpSocket*,QByteArray,qint16)),
             this,    SLOT(handleSOCKSRequest(QTcpSocket*,QByteArray)));
 }
