@@ -24,6 +24,9 @@ public:
 
     int exec();
 
+    QByteArray findPrivateKey(QByteArray publicKey);
+    QByteArray readKeyFile(QString f, QByteArray *pubKey = nullptr);
+
 signals:
 
 public slots:
@@ -39,6 +42,8 @@ private:
     application_server *server;
     application_show   *show;
     application_update *update;
+
+    QHash<QByteArray,QByteArray> key_pairs;
 };
 
 } // namespace bitweb

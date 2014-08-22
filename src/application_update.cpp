@@ -10,14 +10,11 @@
 #include <libtorrent/storage.hpp>
 #include <libtorrent/hasher.hpp>
 #include <libtorrent/create_torrent.hpp>
-
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-
-#include <cryptopp/files.h>
-#include <cryptopp/base64.h>
+#include <libtorrent/ed25519.hpp>
 
 #include "application_update.h"
+#include "application.h"
+#include "qstdstream.h"
 
 namespace {
 
@@ -35,34 +32,11 @@ bool operator == (QStringList a, QStringList b) {
 
 namespace bitweb {
 
-namespace {
-
-void putData(CryptoPP::BufferedTransformation &bt, QByteArray data) {
-    bt.Put((const unsigned char*) data.constData(), data.size());
-    bt.MessageEnd();
-}
-
-void putData(CryptoPP::BufferedTransformation &bt, QIODevice *io) {
-    while(!io->atEnd()) {
-        QByteArray data = io->read(1024 * 16);
-        bt.Put((const unsigned char*) data.constData(), data.size());
-    }
-    bt.MessageEnd();
-}
-
-QByteArray getData(CryptoPP::BufferedTransformation &bt) {
-    CryptoPP::lword len = bt.MaxRetrievable();
-    QByteArray res(len, 0);
-    bt.Get((unsigned char*) res.data(), len);
-    return res;
-}
-
-}
-
 constexpr const char *creator_str = "bitweb";
 
-application_update::application_update(QString torrent, bool truncate, QObject *parent) :
+application_update::application_update(QString torrent, bool truncate, application *parent) :
     QObject(parent),
+    _app(parent),
     _torrentFile(torrent),
     _truncate(truncate),
     _piece_size(16 * 1024)
@@ -76,25 +50,7 @@ void application_update::setCreationDirectory(QString dir)
 
 bool application_update::setKeyFile(QString filename)
 {
-    try {
-        CryptoPP::ByteQueue bytes;
-        QFile f(filename);
-        f.open(QIODevice::ReadOnly);
-        putData(bytes, &f);
-        f.close();
-        _signer.AccessKey().Load(bytes);
-        return true;
-    } catch(...) {
-        QFileInfo f(filename);
-        QByteArray openssl = QString("\topenssl pkcs8 -in %1 -out %2.p8.der -topk8 -nocrypt -outform der")
-                .arg(filename)
-                .arg(f.dir().filePath(f.baseName()))
-                .toLocal8Bit();
-        qCritical() << "Could not load private key, check that it is in PKCS#8 DER format.";
-        qCritical() << "To convert PKCS#1 to PKCS#8, use:";
-        qCritical() << openssl.constData();
-        return false;
-    }
+    _app->readKeyFile(filename, &_pubKey);
 }
 
 bool application_update::open()
@@ -102,10 +58,8 @@ bool application_update::open()
     if(!_truncate) {
         _readTorrent();
     } else if(!_creation_dir.isEmpty()) {
-        QByteArray full_path   = _creation_dir.toUtf8();
         QByteArray parent_path = QFileInfo(_creation_dir).path().toUtf8();
         using namespace libtorrent;
-        using namespace boost::filesystem;
 
         libtorrent::file_storage fs;
         fs.set_piece_length(_piece_size);
@@ -224,31 +178,48 @@ int application_update::exec()
     return 0;
 }
 
+void application_update::_writeVersion()
+{
+    typedef libtorrent::entry entry;
+
+    entry &info = _torrent["info"];
+    if(!info.find_key("version")) info["version"] = entry(entry::dictionary_t);
+    entry &version = info["version"];
+
+    if(!_pubKey.isEmpty()) {
+        version["public key"] = entry(str(_pubKey));
+    } else if(version.find_key("public key")) {
+        _pubKey = qt(version["public key"].string());
+    }
+    if(!version.find_key("id")){
+        unsigned char seed[ed25519_seed_size];
+        ed25519_create_seed(seed);
+        version["id"] = entry(std::string((char*)seed, ed25519_seed_size));
+    }
+    if(!version.find_key("rev")){
+        version["rev"] = entry(1);
+    }
+    if(!version.find_key("parents")){
+        version["parents"] = entry(entry::list_t);
+    }
+}
+
 void application_update::_writeTorrent()
 {
-    // Write public key
-
-    CryptoPP::ByteQueue bytes;
-    //_signer.AccessPublicKey().Save(bytes);
-    _signer.AccessKey().DEREncodePublicKey(bytes);
-    QByteArray der = getData(bytes);
-    _torrent["info"]["public key"] = std::string(der.constData(), der.size());
-
-    //CryptoPP::RSASSA_PKCS1v15_SHA_Verifier _verifier;
-    //_verifier.AccessKey().Load(bytes);
-    //_verifier.AccessPublicKey().Load(bytes);
-    //_verifier.AccessKey().BERDecodePublicKey(bytes, 0, 0);
+    _writeVersion();
 
     // Sign torrent
 
-    QByteArray signatureBuffer;
-    _torrent["info"].dict().erase("signature");
-    libtorrent::bencode(std::back_inserter(signatureBuffer), _torrent);//["info"]);
-    byte signature[ _signer.MaxSignatureLength() ];
-    size_t signlen = _signer.SignMessage(_rng, (const byte*) signatureBuffer.constData(), signatureBuffer.size(), signature);
-    _torrent["info"]["signature"] = std::string((const char*) signature, signlen);
-
-    // Debug print the result
+    if(!_pubKey.isEmpty()) {
+        unsigned char sign[ed25519_signature_size];
+        QByteArray signatureBuffer;
+        QByteArray priv = _app->findPrivateKey(_pubKey);
+        libtorrent::bencode(std::back_inserter(signatureBuffer), _torrent["info"]);
+        ed25519_sign(sign, (const unsigned char*) signatureBuffer.constData(), signatureBuffer.size(),
+                     (const unsigned char*) _pubKey.constData(),
+                     (const unsigned char*) priv.constData());
+        _torrent["version signature"] = libtorrent::entry(std::string((char*)sign, ed25519_signature_size));
+    }
 
     #if 0
     std::cout << te << std::endl;

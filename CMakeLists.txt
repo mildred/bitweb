@@ -11,7 +11,6 @@ find_package(OpenSSL REQUIRED)
 find_package(Qt5 COMPONENTS Core Network)
 find_package(Tufao1 1.0 REQUIRED)
 pkg_check_modules(BITTORRENT REQUIRED libtorrent-rasterbar)
-pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
 
 add_subdirectory(src)
 
@@ -24,4 +23,4 @@ add_executable(bitweb
   src/bitweb.cpp
 )
 
-target_link_libraries(bitweb ${BITTORRENT_LIBRARIES} ${TUFAO_LIBRARIES} ${CRYPTOPP_LIBRARIES} crypto Qt5::Core dl bitweb_server)
+target_link_libraries(bitweb ${BITTORRENT_LIBRARIES} ${TUFAO_LIBRARIES} Qt5::Core dl bitweb_server)

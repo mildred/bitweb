@@ -7,7 +7,6 @@
 #include <libtorrent/torrent_info.hpp>
 #include <libtorrent/lazy_entry.hpp>
 
-#include <cryptopp/rsa.h>
 
 #include "application_show.h"
 
@@ -38,43 +37,6 @@ int application_show::exec()
     QByteArray infoHashHex = QByteArray(t.info_hash().to_string().c_str(), 20).toHex();
     std::cout << "info hash: " << std::string(infoHashHex.constData(), infoHashHex.size()) << std::endl;
     std::cout << "torrent name: " << t.name() << std::endl;
-
-    libtorrent::lazy_entry *info = e.dict_find("info");
-    if(info) {
-        libtorrent::lazy_entry *pubkey = info->dict_find("public key");
-        libtorrent::lazy_entry *signature = info->dict_find("signature");
-        if(pubkey && signature && pubkey->type() == libtorrent::lazy_entry::string_t && signature->type() == libtorrent::lazy_entry::string_t) {
-            try {
-                CryptoPP::ByteQueue bytes;
-                bytes.Put((const byte*) pubkey->string_cstr(), pubkey->string_length());
-                bytes.MessageEnd();
-                _verifier.AccessKey().Load(bytes);
-                //_verifier.AccessPublicKey().Load(bytes);
-
-                QByteArray signatureBuffer;
-                libtorrent::entry info2;
-                info2 = *info;
-                info2.dict().erase("signature");
-                libtorrent::bencode(std::back_inserter(signatureBuffer), info2);
-
-                bool res = _verifier.VerifyMessage(
-                            (const byte*) signatureBuffer.constData(), signatureBuffer.size(),
-                            (const byte*) signature->string_cstr(), signature->string_length());
-
-                if(res) {
-                    std::cout << "signature: passed" << std::endl;
-                } else {
-                    std::cout << "signature: failed" << std::endl;
-                }
-            } catch(CryptoPP::BERDecodeErr &e) {
-                std::cout << "signature: (could not read public key)" << std::endl;
-            }
-        } else {
-            std::cout << "signature: not found" << std::endl;
-        }
-    } else {
-        std::cout << "warning: no info dict" << std::endl;
-    }
 
     std::cout << libtorrent::print_entry(e) << std::endl;
 

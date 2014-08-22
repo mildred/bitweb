@@ -2,6 +2,7 @@
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QFile>
+#include <QStandardPaths>
 
 #include <libtorrent/ed25519.hpp>
 #include <libtorrent/entry.hpp>
@@ -192,6 +193,12 @@ bool application::parseArguments()
     if(parser.isSet(genKeyOption)){
         QString fname = parser.isSet(keyOption) ? parser.value(keyOption) : "%.key";
         generateKeyPair(fname);
+    } else {
+        for(QString keyfile : parser.values(keyOption)) {
+            if(readKeyFile(keyfile).isEmpty()){
+                std::cerr << keyfile.toLocal8Bit() << ": could not load key" << std::endl;
+            }
+        }
     }
 
     if(parser.isSet(daemonOption)) {
@@ -263,17 +270,51 @@ void application::generateKeyPair(QString filename)
     ed25519_create_keypair(public_key, private_key, seed);
     keypair["type"] = "ed25519";
     keypair["public key"] = std::string((char*) public_key, (unsigned long) ed25519_public_key_size);
-    keypair["private_key"] = std::string((char*) private_key, (unsigned long) ed25519_private_key_size);
+    keypair["private key"] = std::string((char*) private_key, (unsigned long) ed25519_private_key_size);
     libtorrent::bencode(std::back_inserter(buffer), keypair);
 
-    QByteArray pub = QByteArray((char*) public_key, (unsigned long) ed25519_public_key_size).toHex();
-    QFile f(filename.replace("%", pub));
+    QByteArray pub((char*) public_key, (unsigned long) ed25519_public_key_size);
+    key_pairs[pub] = QByteArray((char*) private_key, (unsigned long) ed25519_private_key_size);
+    QByteArray hex = pub.toHex();
+    QFile f(filename.replace("%", hex));
     f.open(QIODevice::WriteOnly | QIODevice::Truncate);
     f.write(buffer);
     f.close();
 
-    std::cout << "Public Key: " << pub << std::endl;
+    std::cout << "Public Key: " << hex << std::endl;
     std::cout << "File: " << f.fileName().toLocal8Bit() << std::endl;
+}
+
+QByteArray application::findPrivateKey(QByteArray publicKey)
+{
+    if(key_pairs.contains(publicKey))
+        return key_pairs[publicKey];
+
+    QByteArray hex = publicKey.toHex();
+    QString file = QStandardPaths::locate(QStandardPaths::DataLocation, QString("%s.key").arg(QString::fromLatin1(hex)));
+    if(!file.isEmpty()) {
+        return readKeyFile(file);
+    }
+
+    return QByteArray();
+
+}
+
+QByteArray application::readKeyFile(QString fname, QByteArray *pubKey)
+{
+    QFile f(fname);
+    f.open(QIODevice::ReadOnly);
+    QByteArray buf = f.readAll();
+    libtorrent::entry e = libtorrent::bdecode(buf.begin(), buf.end());
+    f.close();
+    if(e["type"] == libtorrent::entry(std::string("ed25519"))) {
+        QByteArray pub  = qt(e["public key"].string());
+        QByteArray priv = qt(e["private key"].string());
+        if(pubKey) *pubKey = pub;
+        key_pairs[pub] = priv;
+        return priv;
+    }
+    return QByteArray();
 }
 
 } // namespace bitweb
