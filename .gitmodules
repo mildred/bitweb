@@ -1,3 +1,6 @@
 [submodule "src/deathhandler"]
 	path = src/deathhandler
 	url = https://github.com/vmarkovtsev/DeathHandler.git
+[submodule "src/ed25519"]
+	path = src/ed25519
+	url = https://github.com/nightcracker/ed25519.git
