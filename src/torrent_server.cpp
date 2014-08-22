@@ -89,7 +89,7 @@ torrent_server::torrent_server(QObject *parent) :
             QByteArray state = resumeFile.readAll();
             resumeFile.close();
             for(int i = 0; i < state.size(); ++i) resumeData.push_back(state[i]);
-            addt.resume_data = &resumeData;
+            addt.resume_data = resumeData;
             qDebug() << "resume torrent from" << resumeFile.fileName();
         }
         if(torrentFile.exists()) {

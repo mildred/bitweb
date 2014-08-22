@@ -6,3 +6,12 @@ cmake_install.cmake
 moc_*.cpp
 *_automoc.cpp
 *.cbp
+
+/CMakeLists.txt.user
+/install/
+/libtorrent-src/
+
+/bitweb
+/src/libbitweb_server.a
+/src/socks4a/libsocks4a.a
+

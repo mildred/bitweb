@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.0)
 project(bitweb)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-set(CMAKE_AUTOMOC   TRUE)
+set(CMAKE_CXX_FLAGS      "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-deprecated-declarations")
+set(CMAKE_AUTOMOC        TRUE)
+set(ENV{PKG_CONFIG_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/install/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 
 include(FindPkgConfig)
 

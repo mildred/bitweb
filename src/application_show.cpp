@@ -76,7 +76,7 @@ int application_show::exec()
         std::cout << "warning: no info dict" << std::endl;
     }
 
-    std::cout << e << std::endl;
+    std::cout << libtorrent::print_entry(e) << std::endl;
 
     const libtorrent::file_storage &files = t.files();
     int index = 0;
