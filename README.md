@@ -150,82 +150,33 @@ Reference
 - [SOCKS4](http://www.openssh.com/txt/socks4.protocol)
 - [SOCKS4A](http://www.openssh.com/txt/socks4a.protocol)
 - [libtorrent](http://www.rasterbar.com/products/libtorrent/)
+- [BEP 35: signing](http://bittorrent.org/beps/bep_0035.html)
+- [BEP 38: share files between torrents](http://bittorrent.org/beps/bep_0038.html)
+- [XDG basedir specification](http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)
 
-Old Things (for personal reference)
-===================================
+Hacking
+=======
 
-Torrent file spec
------------------
+Small tasks:
 
-- Use signing spec at http://bittorrent.org/beps/bep_0035.html
-- Use http://bittorrent.org/beps/bep_0038.html
-    - include parents in similar keys
-    - collection key should contain the public key
+- Auto detect file mime type on torrent creation: Have a
+  `--autodetect-content-type` when creating a torrent file.
 
-    torrent = dict {
-        info
-        announce
-        announce-list
-        creation date
-        comment
-        created by
-    }
+- Honor [XDG basedir specification](http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)
 
-    torrent info = dict {
-        piece length
-        pieces
-        name
-        length [single file]
-        files [multiple files]
-        pubkey [bitweb]
-        last version [bitweb]
-        signature [bitweb]
-    }
+- Command line to seed a site:
+  `bitweb -A|--add -t TORRENTFILE --copy|--hardlink DIR`
+  would copy (`--reflink` if possible) or hardlink `DIR` to
+  `~/.local/share/bitweb`.
 
-    torrent info "piece length" = integer
-    torrent info pieces = string(20*x)
-    torrent info name = string
-    torrent info length = integer
-    torrent info files = list dict {
-        length
-        path
-        headers [bitweb]
-    }
-    torrent info pubkey = string
-    torrent info "last version" = list string(20)
-    torrent info "last version" = string as if the signature was absent
+- HTTP server: add mode to listen to a HTTP port (default would be 80). Use the
+  HTTP/1.1 Host request header to detect the info_hash of the requested site, or
+  the name of a torrent that is in ~/.local/share/bitweb (not in cache). Default
+  to a specified info hash if no torrent found. Add ability to specify a
+  correspondance table between a domain name and a info hash.
 
-    torrent info files path = list string
-    torrent info files length = integer
-    torrent info files headers = dict
-
-Note that info_hash = sha1(bencode(torrent info))
-
-Make sure that identical files get identical pieces, through different version, even though they are moved.
-
-Key format is DER (as understood by QSslKey, that is the binary information contained in the PEM format in a base64 form)
-
-Command Line
-------------
-
-start daemon:
-
-    bitweb -D|--daemon [-p PORT]
-
-create torent file
-
-    bitweb -C|--create -t TORRENTFILE [-p|--parent INFOHASH] DIR
-
-show torrent file
-
-    bitweb -S|--show -t TORRENTFILE [-f SUBFILE [-h HEADER]]
-
-update torrent file
-
-    bitweb -U|--update -t TORRENTFILE -f SUBFILE -h HEADER:VALUE...
-
-SOCKS Interface
----------------
+Handle torrent versions
+-----------------------
 
 Access the INFOHASH website at this exact revision:
 
@@ -248,6 +199,23 @@ A torrent advertisement contains its infohash and the infohash of all its
 parent. For each infohash, the author identity is stored as well (hash of the
 public key).
 
+Hardening code
+--------------
+
+Each socks client (source IP and port) in a separate process (in case the
+process crash). Avoid too much processes (one process per  connection) and avoid
+crashing other users or the main daemon.
+
+Have a separate process for the torrent node as well.
+
+Simple related tasks includes:
+
+- Add exception handlers
+- Add SIGSEGV handler that would print debug info and exec to a new instance.
+
+Code issues
+===========
+
 Crypto++
 --------
 
@@ -259,3 +227,5 @@ See: http://crypto-users.996303.n3.nabble.com/Load-Private-RSA-key-td2851.html
 And: http://www.cryptopp.com/fom-serve/cache/62.html
 And: http://stackoverflow.com/questions/9869261/crypto-load-rsa-pkcs1-private-key-from-memory
 And: http://www.cryptopp.com/wiki/Keys_and_Formats
+
+See: http://stackoverflow.com/questions/25441918/crypto-cant-der-encode-and-ber-decode-rsa-public-key-ber-decode-error
