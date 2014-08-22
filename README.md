@@ -188,6 +188,8 @@ Small tasks:
 Handle torrent versions using [DHT store extension](http://www.rasterbar.com/products/libtorrent/dht_store.html)
 -------------------------------------------------
 
+Implementation note: `session::dht_get_item()` and `session::dht_put_item()`
+
 In the info dict, add a "bitweb" entry containing a dict with:
 
 - `public key`: ed25519 public key (32 bytes string)
