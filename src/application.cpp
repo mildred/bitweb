@@ -3,6 +3,11 @@
 #include <QDebug>
 #include <QFile>
 
+#include <libtorrent/ed25519.hpp>
+#include <libtorrent/entry.hpp>
+#include <libtorrent/bencode.hpp>
+
+#include "qstdstream.h"
 #include "application.h"
 #include "application_server.h"
 #include "application_show.h"
@@ -45,6 +50,7 @@ static void force_quit_term(int num){
 
 application::application(int &argc, char **argv) :
     QCoreApplication(argc, argv),
+    run(false),
     sigint(&quit, &force_quit_int),
     sigterm(&quit, &force_quit_term),
     server(nullptr),
@@ -123,6 +129,10 @@ bool application::parseArguments()
                 QStringList() << "d" << "debug",
                 tr("Enable debug mode"));
 
+    QCommandLineOption genKeyOption(
+                QStringList() << "K" << "generate-key",
+                tr("Generate a private/public key pair."));
+
     QCommandLineOption createOption(
                 QStringList() << "C" << "create",
                 tr("Create a torrent file"));
@@ -162,6 +172,8 @@ bool application::parseArguments()
     parser.addOption(portOption);
     parser.addOption(debugOption);
 
+    parser.addOption(genKeyOption);
+
     parser.addOption(createOption);
     parser.addOption(updateOption);
     parser.addOption(showOption);
@@ -177,9 +189,15 @@ bool application::parseArguments()
 
     int port = parser.value(portOption).toInt();
 
+    if(parser.isSet(genKeyOption)){
+        QString fname = parser.isSet(keyOption) ? parser.value(keyOption) : "%.key";
+        generateKeyPair(fname);
+    }
+
     if(parser.isSet(daemonOption)) {
         server = new application_server(port, this);
         server->setDebug(parser.isSet(debugOption));
+        run = true;
     } else if(parser.isSet(showOption)) {
         show = new application_show(parser.value(torrentOption), this);
     } else if(parser.isSet(updateOption)) {
@@ -206,7 +224,7 @@ bool application::parseArguments()
         if(parser.isSet(keyOption))
             if(!update->setKeyFile(parser.value(keyOption))) return false;
         if(!update->open()) return false;
-    } else {
+    } else if(!parser.isSet(genKeyOption)) {
         qDebug() << args;
         QFile err;
         err.open(stderr, QIODevice::WriteOnly);
@@ -229,7 +247,33 @@ int application::exec()
 {
     if(show)   return show->exec();
     if(update) return update->exec();
+    if(!run)   return 0;
     return QCoreApplication::exec();
+}
+
+void application::generateKeyPair(QString filename)
+{
+    libtorrent::entry keypair;
+    QByteArray buffer;
+    unsigned char seed[ed25519_seed_size];
+    unsigned char public_key[ed25519_public_key_size];
+    unsigned char private_key[ed25519_private_key_size];
+
+    ed25519_create_seed(seed);
+    ed25519_create_keypair(public_key, private_key, seed);
+    keypair["type"] = "ed25519";
+    keypair["public key"] = std::string((char*) public_key, (unsigned long) ed25519_public_key_size);
+    keypair["private_key"] = std::string((char*) private_key, (unsigned long) ed25519_private_key_size);
+    libtorrent::bencode(std::back_inserter(buffer), keypair);
+
+    QByteArray pub = QByteArray((char*) public_key, (unsigned long) ed25519_public_key_size).toHex();
+    QFile f(filename.replace("%", pub));
+    f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    f.write(buffer);
+    f.close();
+
+    std::cout << "Public Key: " << pub << std::endl;
+    std::cout << "File: " << f.fileName().toLocal8Bit() << std::endl;
 }
 
 } // namespace bitweb

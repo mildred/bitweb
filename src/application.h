@@ -29,6 +29,10 @@ signals:
 public slots:
 
 private:
+    void generateKeyPair(QString filename);
+
+    bool run;
+
     signal_dispatcher<SIGINT>  sigint;
     signal_dispatcher<SIGTERM> sigterm;
 

@@ -86,6 +86,19 @@ You can seed your torrent:
 
 (and restart your server, `HUP` signal doesn't work yet)
 
+Future usage (using ed25519)
+----------------------------
+
+Generate a key pair:
+
+    $ bitweb -K
+    Public Key: c015b1438a5dd7b18d203758b576719ac768247e89f92444bd1e8b8e77565eca
+    File: c015b1438a5dd7b18d203758b576719ac768247e89f92444bd1e8b8e77565eca.key
+
+Copy the generated `.key` file to `~/.local/share/bitweb`
+
+
+
 Further work, Bittorrent extensions
 ===================================
 
