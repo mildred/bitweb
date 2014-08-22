@@ -107,6 +107,11 @@ removed).
 For a request to a specific info_hash, the rule is to trust the key included in
 that info_hash when requesting future revisions.
 
+TODO: Use [BEP 35, signing](http://bittorrent.org/beps/bep_0035.html) instead?
+The problem is that the signature is outsie the info dict and may not be
+transmitted when initializing through magnet links. Or completely forget about
+this part as it will be taken care of by the torrent revisions
+
 File metadata (implemented)
 -------------
 
@@ -117,12 +122,12 @@ Torrent versions
 ----------------
 
 A torrent can reference previous versions. When referencing a previous version,
-a torrent must also reference recursively all the previous versions.
+a torrent must also reference recursively all the previous versions. See below
+for the implementation details.
 
-The DHT must store for each torrent all the newer versions. For each version,
-the DHT must also contain the public key (or hash of the public key) and the
-list of parent versions. With this information, a client knows which is the
-latest version (the greatest number of revisions with the same key).
+TODO: maybe we might want to make this more general than bitweb. Avoid using the
+string "bitweb" when implementing that feature. maybe it could be proposed as a
+BEP.
 
 Backlinks
 ---------
@@ -175,29 +180,76 @@ Small tasks:
   to a specified info hash if no torrent found. Add ability to specify a
   correspondance table between a domain name and a info hash.
 
-Handle torrent versions
------------------------
+- use libtorrent share mode
 
-Access the INFOHASH website at this exact revision:
+- port code to libtorrent 1.x (I am using 0.x because ArchLinux package is not
+  yet up to date).
 
-    http://INFOHASH=.bitweb
+Handle torrent versions using [DHT store extension](http://www.rasterbar.com/products/libtorrent/dht_store.html)
+-------------------------------------------------
 
-Access the INFOHASH website at the latest revision:
+In the info dict, add a "bitweb" entry containing a dict with:
 
-    http://INFOHASH.bitweb
-    http://INFOHASH+.bitweb
+- `public key`: ed25519 public key (32 bytes string)
+- `id`: any string that, together with the public key) will uniquely identify
+   the website.
+- `seq`: the revision of the website. Starts at 1. (integer)
+- `parents`: a list containing the revisions of the website. The first item
+   being the first revision (having `seq` equal to 1). For each revision the 20
+   bytes of the info hash is stored as a string. The list must contain `seq - 1`
+   items. No less, no more.
+- `parent signatures`: a list containing the signatures for the parents.
 
-The latest revision of an info hash is:
+New revisions are made by incrementing the `seq` number and adding the parent
+hash info to the `parents` list.
 
-- a torrent that have the current info hash in its list of parents
-- a torrent that is signed by the same key
-- the torrent that have the most revions between the current infohash and the end of the parent list
-- if multiple torrent mathes, take a torrent with less parents in its parent list
+Revisions are advertised using the [DHT store extension](http://www.rasterbar.com/products/libtorrent/dht_store.html).
+A mutable item is stored with:
 
-A torrent is advertised using its infohash and the inforhashes of the parent list.
-A torrent advertisement contains its infohash and the infohash of all its
-parent. For each infohash, the author identity is stored as well (hash of the
-public key).
+- `k`: the `public key` value defined above
+- `salt`: a 27 bytes string. The first 7 bytes being `"bitweb:"` and the last 20
+   bytes being the sha1 hash of the `id` value defined above.
+- `seq`: the `seq` value defined above
+- `v`: the info hash of the torrent
+- `auto update`: a boolean true (integer 1) or false (integer 0). If not
+   specified, true is assumed.
+
+The `cas` field is not present, the `id`, `sig` and `token` fields are computed
+as defined in the DHT store extension.
+
+To allow anyone to republish a version of the torrent, the torrent should
+contain outside of the info dict the signature required to republish the value.
+It cannot be included inside the info dict because the signature depends on the
+info hash value.
+
+TODO: this signature should be obtained by nodes when they use magnet links to
+obtain the torrent. The client can check that the signature obtained is valid by
+checking it against the public key and the site id stored inside the info hash.
+
+*Other idea: instead of looking up websites by the info hash, look them up
+against `sha1(info_hash + signature)` and have this information stored as an
+immutable message through the DHT store extension. The problem with that is that
+it adds an indirection layer and will slow down downloading a torrent for the
+first time, and initial HTTP connection.*
+
+When obtained, and if a torrent file is written to disk, the signature should be
+included in a `bitweb signature` key at the same level of the `info` dict. Every
+bitweb client that share a website should regularly republish the latest
+signature.
+
+URL conventions:
+
+- `http://INFOHASH=.bitweb`: the website at the revision of `INFOHASH` exactly
+- `http://INFOHASH=N.bitweb`: the website at the Nth revision as specified in
+  the `INFOHASH` torrent
+- `http://INFOHASH+.bitweb`: the website at the latest possible revision
+- `http://INFOHASH+N.bitweb`: the website at the Nth revision as specified in
+  the latest possible revision of `INFOHASH`
+- `http://INFOHASH.bitweb`: either the `INFOHASH=.bitweb` or `INFOHASH+.bitweb`
+  depending on the `auto update` value specified in the `bitweb` dict.
+
+TODO: be notified in real time when a site is updated and do not require
+pooling frequently for updates.
 
 Hardening code
 --------------
