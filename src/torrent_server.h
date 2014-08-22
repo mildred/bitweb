@@ -24,11 +24,14 @@ public:
     typedef libtorrent::size_type size_type;
 
     torrent_file(libtorrent::torrent_handle t, libtorrent::sha1_hash info_hash, QString path);
-    bool                       exists;
-    int                        index;
-    libtorrent::torrent_handle t;
-    libtorrent::torrent_info   ti;
-    libtorrent::file_storage   fs;
+    bool                          exists;
+    int                           index;
+    libtorrent::torrent_handle    t;
+    libtorrent::torrent_info      ti;
+    libtorrent::file_storage      fs;
+    const libtorrent::lazy_entry *headers;
+    int                           http_status;
+    std::string                   http_status_message;
 
     size_type file_size;
     size_type file_offset;

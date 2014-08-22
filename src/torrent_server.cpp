@@ -12,6 +12,7 @@
 #include <libtorrent/bencode.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/add_torrent_params.hpp>
+#include <libtorrent/create_torrent.hpp>
 
 #include "torrent_server.h"
 
@@ -81,6 +82,7 @@ torrent_server::torrent_server(QObject *parent) :
         addt.uuid = qhashinfohex.constData();
 
         QFile resumeFile(fi.filePath() + ".fastresume");
+        QFile torrentFile(fi.filePath() + ".torrent");
         std::vector<char> resumeData;
         if(resumeFile.exists()) {
             resumeFile.open(QIODevice::ReadOnly);
@@ -89,6 +91,13 @@ torrent_server::torrent_server(QObject *parent) :
             for(int i = 0; i < state.size(); ++i) resumeData.push_back(state[i]);
             addt.resume_data = &resumeData;
             qDebug() << "resume torrent from" << resumeFile.fileName();
+        }
+        if(torrentFile.exists()) {
+            qDebug() << "read torrent from" << torrentFile.fileName();
+            addt.ti = new libtorrent::torrent_info(torrentFile.fileName().toStdString());
+            if(addt.info_hash != addt.ti->info_hash()) {
+                qWarning() << "torrent file name has incorrect info_hash";
+            }
         }
 
         libtorrent::error_code ec;
@@ -144,6 +153,18 @@ void torrent_server::saveResumeData(bool resume_session)
         if (!h.is_valid()) continue;
         torrent_status s = h.status();
         if (!s.has_metadata) continue;
+
+        QFile tf(QString::fromStdString(h.save_path()) + ".torrent");
+        if(!tf.exists()) {
+            qDebug() << "save torrent to" << tf.fileName();
+            QByteArray tb;
+            tf.open(QIODevice::WriteOnly);
+            libtorrent::create_torrent tc(h.get_torrent_info());
+            libtorrent::bencode(std::back_inserter(tb), tc.generate());
+            tf.write(tb);
+            tf.close();
+        }
+
         if (!s.need_save_resume) continue;
 
         h.save_resume_data();
@@ -161,7 +182,7 @@ void torrent_server::saveResumeData(bool resume_session)
         buffer.clear();
         bencode(std::back_inserter(buffer), *rd->resume_data);
         QFile f(QString::fromStdString(rd->handle.save_path()) + ".fastresume");
-        qDebug() << "save torrent to" << f.fileName();
+        qDebug() << "save torrent resume data to" << f.fileName();
         f.open(QIODevice::WriteOnly | QIODevice::Truncate);
         f.write(buffer);
         f.close();
@@ -209,13 +230,24 @@ torrent_file::torrent_file(libtorrent::torrent_handle t, libtorrent::sha1_hash i
     t(t),
     ti(t.get_torrent_info()),
     fs(ti.files()),
+    headers(nullptr),
+    http_status(404),
+    http_status_message(),
     file_size(0), file_offset(0), piece_length(fs.piece_length()), first_piece(0), last_piece(-1), num_pieces(0)
 {
-    if(ti.info("files") == 0) {
+    const libtorrent::lazy_entry *files = ti.info("files");
+
+    if(!files) {
         // single file torrent
         if(path == "/") {
             index = 0;
             exists = true;
+            headers = ti.info("headers");
+            http_status = 200;
+            auto status = ti.info("http status");
+            if(status->type() == libtorrent::lazy_entry::int_t) http_status = status->int_value();
+            auto status_message = ti.info("http status message");
+            if(status_message->type() == libtorrent::lazy_entry::string_t) http_status_message = status_message->string_value();
         }
     } else {
         path = QString::fromStdString(t.name()) + path;
@@ -224,13 +256,26 @@ torrent_file::torrent_file(libtorrent::torrent_handle t, libtorrent::sha1_hash i
 
         int choice1 = -1, choice2 = -1;
         for(int i = 0; i < ti.num_files(); ++i) {
-            if(          path2 == fs.file_path(i) + ".bitweb")    choice1 = i;
-            if(!isdir && path2 == fs.file_path(i))                choice2 = i;
-            if(isdir  && path2 == fs.file_path(i) + "index.html") choice2 = i;
+            //qDebug() << "look for" << path << isdir << "try" << fs.file_path(i).c_str();
+            if(          fs.file_path(i) == path2 + ".bitweb")    choice1 = i;
+            if(!isdir && fs.file_path(i) == path2)                choice2 = i;
+            if( isdir && fs.file_path(i) == path2 + "index.html") choice2 = i;
         }
 
         index  = (choice1 != -1) ? choice1 : choice2;
         exists = index != -1;
+        if(exists) http_status = 200;
+
+        //if(exists) qDebug() << "Found file" << fs.file_path(index).c_str() << "for" << path;
+
+        const libtorrent::lazy_entry *file = files->list_at(index);
+        if(file) {
+            headers = file->dict_find("headers");
+            auto status = file->dict_find("http status");
+            if(status && status->type() == libtorrent::lazy_entry::int_t) http_status = status->int_value();
+            auto status_message = file->dict_find("http status message");
+            if(status_message && status_message->type() == libtorrent::lazy_entry::string_t) http_status_message = status_message->string_value();
+        }
     }
 
     if(exists) {

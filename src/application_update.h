@@ -11,6 +11,7 @@
 #include <libtorrent/hasher.hpp>
 
 #include <cryptopp/rsa.h>
+#include <cryptopp/osrng.h>
 
 namespace libtorrent { class file_storage; }
 
@@ -24,6 +25,8 @@ public:
 
     void setCreationDirectory(QString dir);
     bool setKeyFile(QString filename);
+    bool setHeader(QString path, QString header, QString value);
+    bool open();
     int exec();
 
 private:
@@ -31,17 +34,15 @@ private:
     void _addDir(libtorrent::file_storage &fs, QDir d, QStringList prefix = QStringList());
     void _addFile(libtorrent::file_storage &fs, QFileInfo f, QStringList path);
     void _pad(libtorrent::file_storage &fs, unsigned piece_size);
-    void _hash(const QByteArray &data);
-    void _hash(QIODevice *f);
+    void _writeTorrent();
 
     QString  _creation_dir;
-    QFile    _torrent;
+    QFile    _torrentFile;
     bool     _truncate;
     unsigned _piece_size;
-    unsigned _hasher_size;
-    libtorrent::hasher _hasher;
-    QList<libtorrent::sha1_hash> _hashs;
     CryptoPP::RSASSA_PKCS1v15_SHA_Signer _signer;
+    CryptoPP::AutoSeededRandomPool _rng;
+    libtorrent::entry _torrent;
 };
 
 } // namespace bitweb

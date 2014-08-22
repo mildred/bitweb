@@ -186,11 +186,26 @@ bool application::parseArguments()
         update = new application_update(parser.value(torrentOption), false, this);
         if(parser.isSet(keyOption))
             if(!update->setKeyFile(parser.value(keyOption))) return false;
+        if(!update->open()) return false;
+        if(parser.isSet(pathOption) && parser.isSet(headerOption)) {
+            QString path = parser.value(pathOption);
+            QString headerval = parser.value(headerOption);
+            int idx = headerval.indexOf(':');
+            if(idx < 0) {
+                QFile err;
+                err.open(stderr, QIODevice::WriteOnly);
+                err.write("Header value should be HEADER:VALUE\n");
+                err.close();
+            } else {
+                update->setHeader(path, headerval.left(idx), headerval.right(headerval.size() - idx - 1));
+            }
+        }
     } else if(parser.isSet(createOption)) {
         update = new application_update(parser.value(torrentOption), true, this);
         update->setCreationDirectory(args.first());
         if(parser.isSet(keyOption))
             if(!update->setKeyFile(parser.value(keyOption))) return false;
+        if(!update->open()) return false;
     } else {
         qDebug() << args;
         QFile err;

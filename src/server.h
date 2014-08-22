@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <Tufao/HttpServer>
+#include <Tufao/HttpServerResponse>
 #include "socks4a/socks4a.h"
 #include "torrent_server.h"
 
@@ -28,6 +29,8 @@ private slots:
 
 private:
     int acceptSOCKSRequest(QByteArray domainName, qint16 portNumber, QByteArray userid);
+
+    QByteArray reasonPhrase(Tufao::HttpResponseStatus status, std::string defaultReason);
 
     socks4a::server _socks;
     torrent_server *_torrent;

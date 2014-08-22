@@ -19,6 +19,19 @@
 
 #include "application_update.h"
 
+namespace {
+
+bool operator == (QStringList a, QStringList b) {
+    int len = a.length();
+    if(len != b.length()) return false;
+    for(int i = 0; i < len; ++i) {
+        if(a[i] != b[i]) return false;
+    }
+    return true;
+}
+
+}
+
 
 namespace bitweb {
 
@@ -50,12 +63,9 @@ constexpr const char *creator_str = "bitweb";
 
 application_update::application_update(QString torrent, bool truncate, QObject *parent) :
     QObject(parent),
-    _torrent(torrent),
+    _torrentFile(torrent),
     _truncate(truncate),
-    _piece_size(16 * 1024),
-    _hasher_size(0),
-    _hasher(),
-    _hashs()
+    _piece_size(16 * 1024)
 {
 }
 
@@ -70,13 +80,8 @@ bool application_update::setKeyFile(QString filename)
         CryptoPP::ByteQueue bytes;
         QFile f(filename);
         f.open(QIODevice::ReadOnly);
-        //QSslKey k(&f, QSsl::Rsa);
         putData(bytes, &f);
         f.close();
-        //putData(bytes, k.toDer());
-        //putData(bytes, QByteArray::fromBase64(""));
-        //_privateKey.Load(bytes);
-        bytes.MessageEnd();
         _signer.AccessKey().Load(bytes);
         return true;
     } catch(...) {
@@ -90,25 +95,13 @@ bool application_update::setKeyFile(QString filename)
         qCritical() << openssl.constData();
         return false;
     }
-
-    /*
-    QByteArray encodedFileName = QFile::encodeName(filename);
-    CryptoPP::ByteQueue bytes;
-    //CryptoPP::Base64Decoder decoder;
-    CryptoPP::FileSource file(encodedFileName.constData(), true);//, &decoder);
-    file.TransferTo(bytes);
-    bytes.MessageEnd();
-    _privateKey.Load(bytes);
-    */
 }
 
-int application_update::exec()
+bool application_update::open()
 {
     if(!_truncate) {
         _readTorrent();
-        _piece_size = -1;
-    }
-    if(!_creation_dir.isEmpty()) {
+    } else if(!_creation_dir.isEmpty()) {
         QByteArray full_path   = _creation_dir.toUtf8();
         QByteArray parent_path = QFileInfo(_creation_dir).path().toUtf8();
         using namespace libtorrent;
@@ -117,11 +110,6 @@ int application_update::exec()
         libtorrent::file_storage fs;
         fs.set_piece_length(_piece_size);
 
-
-        /*QCryptographicHash hash(QCryptographicHash::Sha1);
-        hash.addData("", 0);
-        QByteArray sha1 = hash.result();*/
-
         _addDir(fs, _creation_dir);
 
         if(fs.num_files() == 0) {
@@ -129,49 +117,37 @@ int application_update::exec()
             e.path = "bitwebsite/.bitweb";
             e.size = 0;
             e.pad_file = true;
-            fs.add_file(e); //, sha1.constData());
+            fs.add_file(e);
         }
-
-        Q_ASSERT(_hasher_size == 0);
 
         QByteArray fileName = QFileInfo(_creation_dir).fileName().toUtf8();
         fs.set_name(fileName.constData());
-        fs.set_num_pieces(_hashs.size());
 
-        libtorrent::create_torrent t(fs, _piece_size, -1, 0);
-        //for(int i = 0; i < _hashs.size(); ++i) {
-        //    t.set_hash(i, _hashs[i]);
-        //}
-        libtorrent::set_piece_hashes(t, parent_path.constData());
-        t.set_creator(creator_str);
+        libtorrent::create_torrent tc(fs, _piece_size, -1, 0);
+        libtorrent::set_piece_hashes(tc, parent_path.constData());
+        tc.set_creator(creator_str);
 
         // create the torrent and print it to out
         //std::cout << t.generate() << std::endl;
-        QByteArray resBuffer;
-        libtorrent::entry te = t.generate();
-        CryptoPP::ByteQueue bytes;
-        //_privateKey.DEREncodePublicKey(bytes);
-        _signer.AccessKey().DEREncodePublicKey(bytes);
-        QByteArray der = getData(bytes);
-        te["info"]["public key"] = std::string(der.constData(), der.size());
-        te["info"].dict().erase("signature");
-        libtorrent::bencode(std::back_inserter(resBuffer), te);
-        //_signer.Sign()
-        resBuffer.clear();
-        te["info"]["signature"] = std::string("SIGN");
-        //std::cout << te << std::endl;
-        //te.print(std::cout);
-        libtorrent::bencode(std::back_inserter(resBuffer), te);
-        _torrent.open(QIODevice::WriteOnly | QIODevice::Truncate);
-        _torrent.write(resBuffer);
-        _torrent.close();
-        //std::cout << resBuffer.constData();
+        _torrent = tc.generate();
+    } else {
+        QFile err;
+        err.open(stderr, QIODevice::WriteOnly);
+        err.write("Cannot create torrent from non existing directory");
+        return false;
     }
-    return 0;
+
+    return true;
 }
 
 void application_update::_readTorrent()
 {
+    _torrentFile.open(QIODevice::ReadOnly);
+    QByteArray torrent_bytes = _torrentFile.readAll();
+    _torrent = libtorrent::bdecode(torrent_bytes.begin(), torrent_bytes.end());
+    _torrentFile.close();
+
+    _piece_size = -1;
 }
 
 void application_update::_addDir(libtorrent::file_storage &fs, QDir d, QStringList prefix)
@@ -189,65 +165,103 @@ void application_update::_addDir(libtorrent::file_storage &fs, QDir d, QStringLi
 
 void application_update::_addFile(libtorrent::file_storage &fs, QFileInfo f, QStringList path)
 {
+    Q_ASSERT(_piece_size > 0);
     using namespace libtorrent;
-
-    /*QCryptographicHash hash(QCryptographicHash::Sha1);
-    QFile fd(f.absoluteFilePath());
-    fd.open(QIODevice::ReadOnly);
-    hash.addData(&fd);
-    fd.close();
-    QByteArray sha1 = hash.result();*/
-
-    QFile fd(f.absoluteFilePath());
-    fd.open(QIODevice::ReadOnly);
-    _hash(&fd);
-    fd.close();
 
     file_entry e;
     QByteArray entry_path = "bitwebsite/" + path.join("/").toUtf8();
     e.path = entry_path.constData();
     e.size = f.size();
-    fs.add_file(e);//, sha1.constData());
+    fs.add_file(e);
 
     unsigned pad_size = _piece_size - (e.size % _piece_size);
     if(pad_size == _piece_size || pad_size == 0) return;
-
-    /*hash.reset();
-    hash.addData(QByteArray(pad_size, 0));
-    sha1 = hash.result();*/
-
-    _hash(QByteArray(pad_size, 0));
 
     QByteArray entry_pad_path = "bitwebsite/.padding/" + path.join("/").toUtf8();
     e.path = entry_pad_path.constData();
     e.size = pad_size;
     e.pad_file = true;
-    fs.add_file(e);//, sha1.constData());
+    fs.add_file(e);
 }
 
-void application_update::_hash(const QByteArray &data)
+bool application_update::setHeader(QString path, QString header, QString value)
 {
-    const char *d = data.constData();
-    unsigned size = data.size();
-    while(size > 0) {
-        unsigned chunk_size = qMin(_piece_size - _hasher_size, size);
-        _hasher_size += chunk_size;
-        _hasher.update(d, chunk_size);
-        d = &d[chunk_size];
-        size -= chunk_size;
-        if(_hasher_size == _piece_size) {
-            _hashs.append(_hasher.final());
-            _hasher.reset();
-            _hasher_size = 0;
+    QStringList pathComp = path.split("/", QString::SkipEmptyParts);
+    libtorrent::entry &info = _torrent["info"];
+    libtorrent::entry *file_entry_ptr = nullptr;
+    if(path == "/" && info.find_key("length")) {
+        // Single file torrent
+        file_entry_ptr = &info;
+    } else if(info.find_key("files")) {
+        libtorrent::entry &files = info["files"];
+        for(libtorrent::entry &entry : files.list()) {
+            QStringList curPathComp;
+            for(libtorrent::entry &comp : entry["path"].list()) {
+                curPathComp << QString::fromStdString(comp.string());
+            }
+            if(curPathComp == pathComp) {
+                file_entry_ptr = &entry;
+                break;
+            }
         }
     }
+    if(file_entry_ptr) {
+        libtorrent::entry &file_entry = *file_entry_ptr;
+        libtorrent::entry *headers_ptr = file_entry.find_key("headers");
+        if(!headers_ptr){
+            file_entry["headers"] = libtorrent::entry(libtorrent::entry::dictionary_t);
+            headers_ptr = &file_entry["headers"];
+        }
+        Q_ASSERT(headers_ptr);
+        libtorrent::entry &headers = *headers_ptr;
+        headers[header.toStdString()] = value.toStdString();
+    }
 }
 
-void application_update::_hash(QIODevice *f)
+int application_update::exec()
 {
-    while(!f->atEnd()) {
-        _hash(f->read(_piece_size - _hasher_size));
-    }
+    _writeTorrent();
+    return 0;
+}
+
+void application_update::_writeTorrent()
+{
+    // Write public key
+
+    CryptoPP::ByteQueue bytes;
+    //_signer.AccessPublicKey().Save(bytes);
+    _signer.AccessKey().DEREncodePublicKey(bytes);
+    QByteArray der = getData(bytes);
+    _torrent["info"]["public key"] = std::string(der.constData(), der.size());
+
+    //CryptoPP::RSASSA_PKCS1v15_SHA_Verifier _verifier;
+    //_verifier.AccessKey().Load(bytes);
+    //_verifier.AccessPublicKey().Load(bytes);
+    //_verifier.AccessKey().BERDecodePublicKey(bytes, 0, 0);
+
+    // Sign torrent
+
+    QByteArray signatureBuffer;
+    _torrent["info"].dict().erase("signature");
+    libtorrent::bencode(std::back_inserter(signatureBuffer), _torrent);//["info"]);
+    byte signature[ _signer.MaxSignatureLength() ];
+    size_t signlen = _signer.SignMessage(_rng, (const byte*) signatureBuffer.constData(), signatureBuffer.size(), signature);
+    _torrent["info"]["signature"] = std::string((const char*) signature, signlen);
+
+    // Debug print the result
+
+    #if 0
+    std::cout << te << std::endl;
+    te.print(std::cout);
+    #endif
+
+    // Write to file
+
+    QByteArray resBuffer;
+    libtorrent::bencode(std::back_inserter(resBuffer), _torrent);
+    _torrentFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    _torrentFile.write(resBuffer);
+    _torrentFile.close();
 }
 
 } // namespace bitweb

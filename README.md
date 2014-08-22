@@ -56,6 +56,36 @@ containing:
 Put the url of this file (using the `file:` protocol) in the proxy settings of
 your browser for the autoconfiguration URL.
 
+Usage
+=====
+
+To start the proxy server on the default port (8878), run:
+
+    bitweb -D
+
+To create a torrent suitable for websites, use the command line:
+
+    bitweb -Ct mywebsite.torrent -k privatekey.p8.der /path/to/my/website
+
+You can add metadata to your pages:
+
+    bitweb -Ut mywebsite.torrent -k privatekey.p8.der -p index.html -H "content-type:text/html; charset=utf-8"
+
+You can visualize your torrent:
+
+    bitweb -St mywebsite.torrent
+
+You can seed your torrent:
+
+    info_hash=$(bitweb -St mywebsite.torrent | grep 'info hash' | cut -d' ' -f3)
+    torrent_name="$(bitweb -St mywebsite.torrent | grep 'info hash' | cut -d' ' -f3-)"
+    
+    cp mywebsite.torrent ~/.cache/bitweb/$info_hash.torrent
+    mkdir ~/.cache/bitweb/$info_hash
+    cp -R /path/to/my/website "~/.cache/bitweb/$info_hash/$torrent_name"
+
+(and restart your server, `HUP` signal doesn't work yet)
+
 Further work, Bittorrent extensions
 ===================================
 
@@ -74,7 +104,10 @@ owner of the corresponding private key authored the info dict. The signature is
 computed using the bencoding of the info dict (with the signature field
 removed).
 
-File metadata
+For a request to a specific info_hash, the rule is to trust the key included in
+that info_hash when requesting future revisions.
+
+File metadata (implemented)
 -------------
 
 Add HTTP header information for each file in a torrent (the content-type for

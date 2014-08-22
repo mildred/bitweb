@@ -4,6 +4,8 @@
 #include <QObject>
 #include <QFile>
 
+#include <cryptopp/rsa.h>
+
 namespace bitweb {
 
 class application_show : public QObject
@@ -17,6 +19,7 @@ public:
 private:
 
     QFile _torrent;
+    CryptoPP::RSASSA_PKCS1v15_SHA_Verifier _verifier;
 };
 
 } // namespace bitweb
