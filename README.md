@@ -35,6 +35,25 @@ The purpose of this is to have:
 
 - make it much more difficult for  central authority to block websites.
 
+Features (not all there yet)
+============================
+
+- Share static content.
+- Access torrent content through HTTP url.
+- Dynamic content can be generated using javascript. Client-side doesn't change
+  compared to current websites
+- Files that didn't changed between versions are shared and don't need to be
+  re-downloaded
+
+Future (to do):
+
+- Identical files that didn't changed between versions don't take twice the disk
+  space
+- Possibility to add new versions (in the form of a new torrent)
+- New versions are discovered automatically
+- A server-side API would need to be standardised for the client side to access
+  dynamic content (such as comments)
+
 Description and installation
 ============================
 

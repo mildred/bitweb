@@ -14,6 +14,7 @@
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/create_torrent.hpp>
 
+#include "bw_version/bw_version_plugin.h"
 #include "torrent_server.h"
 
 #define unless(x) if(!(x))
@@ -27,6 +28,9 @@ torrent_server::torrent_server(QObject *parent) :
                  std::make_pair(6881, 6889))),
     _debug(false)
 {
+    boost::shared_ptr<libtorrent::plugin> bw_version(new libtorrent::extensions::bw_version_plugin(*_session));
+    _session->add_extension(bw_version);
+
     _session->set_alert_mask(libtorrent::alert::all_categories);
     _session->set_alert_dispatch([this](std::auto_ptr<libtorrent::alert> a){
         //qDebug() << "libtorrent" << a->message().c_str();

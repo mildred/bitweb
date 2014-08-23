@@ -14,6 +14,9 @@ add_library(bitweb_server
     application_show.cpp
     application_update.cpp
     socks4a/socks4a.cpp
+    bw_version/bw_version_plugin.cpp
+    bw_version/bw_version_torrent_plugin.cpp
+    bw_version/bw_version_peer_plugin.cpp
 )
 target_link_libraries(bitweb_server Qt5::Core Qt5::Network ${BITTORRENT_LIBRARIES})
 
