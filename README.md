@@ -1,7 +1,7 @@
 BitWeb
 ======
 
-This is a cntinuation of the [P2PWeb](//github.com/mildred/p2pweb) project,
+This is a continuation of the [P2PWeb](//github.com/mildred/p2pweb) project,
 using the bittorrent technology. In a few words, this is a proxy software that
 you can plug your browser with, and that will let you access torrents as if they
 were websites.
